@@ -2,6 +2,8 @@ module Plottable.Plots {
   export class Scatter<X, Y> extends XYPlot<X, Y> {
     private static _SIZE_KEY = "size";
     private static _SYMBOL_KEY = "symbol";
+    private _labelsEnabled = false;
+    private _label: Accessor<string> = null;
 
     /**
      * A Scatter Plot draws a symbol at each data point.
@@ -77,6 +79,29 @@ module Plottable.Plots {
       this.render();
       return this;
     }
+
+    protected _generateAttrToProjector() {
+      let attrToProjector = super._generateAttrToProjector();
+
+      // Copy each of the different projectors.
+      let xAttr = Plot._scaledAccessor(this.x());
+      let yAttr = Plot._scaledAccessor(this.y());
+      let sizeAttr = Plot._scaledAccessor(this.size());
+
+      let xScale = this.x().scale;
+      let yScale = this.y().scale;
+      let sizeScale = this.size().scale;
+
+      attrToProjector["x"] = (d, i, dataset) => xAttr(d, i, dataset);
+
+      attrToProjector["y"] = (d, i, dataset) => yAttr(d, i, dataset);
+
+      attrToProjector["size"] = (d, i, dataset) => sizeAttr(d, i, dataset);
+
+      // Clean up the attributes projected onto the SVG elements
+      return attrToProjector;
+    }
+
 
     protected _generateDrawSteps(): Drawers.DrawStep[] {
       let drawSteps: Drawers.DrawStep[] = [];
@@ -181,6 +206,13 @@ module Plottable.Plots {
       });
     }
 
+    private _entityBBox(datum: any, index: number, dataset: Plottable.Dataset, attrToProjector: AttributeToProjector): SVGRect {
+      return {
+        x: attrToProjector["x"](datum, index, dataset),
+        y: attrToProjector["y"](datum, index, dataset)
+      };
+    }
+
     /**
      * Gets the Entities at a particular Point.
      *
@@ -201,5 +233,131 @@ module Plottable.Plots {
         return x - size / 2  <= p.x && p.x <= x + size / 2 && y - size / 2 <= p.y && p.y <= y + size / 2;
       });
     }
+
+    /**
+     * Gets the accessor for labels.
+     *
+     * @returns {Accessor<string>}
+     */
+    public label(): Accessor<string>;
+    /**
+     * Sets the text of labels to the result of an Accessor.
+     *
+     * @param {Accessor<string>} label
+     * @returns {Plots.Rectangle} The calling Rectangle Plot.
+     */
+    public label(label: Accessor<string>): Plots.Rectangle<X, Y>;
+    public label(label?: Accessor<string>): any {
+      if (label == null) {
+        return this._label;
+      }
+
+      this._label = label;
+      this.render();
+      return this;
+    }
+
+    /**
+     * Gets whether labels are enabled.
+     *
+     * @returns {boolean}
+     */
+    public labelsEnabled(): boolean;
+    /**
+     * Sets whether labels are enabled.
+     * Labels too big to be contained in the rectangle, cut off by edges, or blocked by other rectangles will not be shown.
+     *
+     * @param {boolean} labelsEnabled
+     * @returns {Rectangle} The calling Rectangle Plot.
+     */
+    public labelsEnabled(enabled: boolean): Plots.Rectangle<X, Y>;
+    public labelsEnabled(enabled?: boolean): any {
+      if (enabled == null) {
+        return this._labelsEnabled;
+      } else {
+        this._labelsEnabled = enabled;
+        this.render();
+        return this;
+      }
+    }
+
+    protected _additionalPaint(time: number) {
+      this._renderArea.selectAll(".label-area").remove();
+      if (this._labelsEnabled && this.label() != null) {
+        Utils.Window.setTimeout(() => this._drawLabels(), time);
+      }
+    }
+
+    private _drawLabels() {
+      let dataToDraw = this._getDataToDraw();
+      this.datasets().forEach((dataset, i) => this._drawLabel(dataToDraw, dataset, i));
+    }
+
+    private _drawLabel(dataToDraw: Utils.Map<Dataset, any[]>, dataset: Dataset, datasetIndex: number) {
+      let attrToProjector = this._generateAttrToProjector();
+      let labelArea = this._renderArea.append("g").classed("label-area", true);
+      let measurer = new SVGTypewriter.Measurers.Measurer(labelArea);
+      let writer = new SVGTypewriter.Writers.Writer(measurer);
+      let xRange = this.x().scale.range();
+      let yRange = this.y().scale.range();
+      let xMin = Math.min.apply(null, xRange);
+      let xMax = Math.max.apply(null, xRange);
+      let yMin = Math.min.apply(null, yRange);
+      let yMax = Math.max.apply(null, yRange);
+      let data = dataToDraw.get(dataset);
+      data.forEach((datum, datumIndex) => {
+        let label = "" + this.label()(datum, datumIndex, dataset);
+        let measurement = measurer.measure(label);
+        let x = attrToProjector["x"](datum, datumIndex, dataset);
+        let y = attrToProjector["y"](datum, datumIndex, dataset);
+        let size = attrToProjector["size"](datum, datumIndex, dataset);
+
+        // let horizontalOffset = (measurement.width) / 2;
+        let verticalOffset = (measurement.height) / 2;
+        x += size / 2;
+        y -= verticalOffset + (size / 2);
+
+        let xLabelRange = { min: x, max: x + measurement.width };
+        let yLabelRange = { min : y, max: y + measurement.height };
+        if (xLabelRange.min < xMin || xLabelRange.max > xMax || yLabelRange.min < yMin || yLabelRange.max > yMax) {
+          return;
+        }
+        if (this._overlayLabel(xLabelRange, yLabelRange, datumIndex, datasetIndex, dataToDraw)) {
+          return;
+        }
+
+        let color = attrToProjector["fill"](datum, datumIndex, dataset);
+        let dark = Utils.Color.contrast("white", color) * 1.6 < Utils.Color.contrast("black", color);
+        let g = labelArea.append("g").attr("transform", "translate(" + x + "," + y + ")");
+        let className = dark ? "dark-label" : "light-label";
+        g.classed(className, true);
+        writer.write(label, measurement.width, measurement.height, {
+          selection: g,
+          xAlign: "center",
+          yAlign: "center",
+          textRotation: 0
+        });
+      });
+    }
+
+    private _overlayLabel(labelXRange: Range, labelYRange: Range, datumIndex: number, datasetIndex: number,
+                          dataToDraw: Utils.Map<Dataset, any[]>) {
+      let attrToProjector = this._generateAttrToProjector();
+      let datasets = this.datasets();
+      for (let i = datasetIndex; i < datasets.length; i ++ ) {
+        let dataset = datasets[i];
+        let data = dataToDraw.get(dataset);
+        for (let j = (i === datasetIndex ? datumIndex + 1 : 0); j < data.length ; j ++ ) {
+          if (Utils.DOM.intersectsBBox(labelXRange, labelYRange, this._entityBBox(data[j], j, dataset, attrToProjector))) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+
+
+
   }
 }

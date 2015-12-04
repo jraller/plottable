@@ -3309,6 +3309,8 @@ declare module Plottable.Plots {
     class Scatter<X, Y> extends XYPlot<X, Y> {
         private static _SIZE_KEY;
         private static _SYMBOL_KEY;
+        private _labelsEnabled;
+        private _label;
         /**
          * A Scatter Plot draws a symbol at each data point.
          *
@@ -3349,6 +3351,9 @@ declare module Plottable.Plots {
          * @returns {Plots.Scatter} The calling Scatter Plot.
          */
         symbol(symbol: Accessor<SymbolFactory>): Plots.Scatter<X, Y>;
+        protected _generateAttrToProjector(): {
+            [attr: string]: (datum: any, index: number, dataset: Dataset) => any;
+        };
         protected _generateDrawSteps(): Drawers.DrawStep[];
         /**
          * @deprecated As of release v1.1.0, replaced by _entityVisibleOnPlot()
@@ -3371,6 +3376,7 @@ declare module Plottable.Plots {
          * @returns {PlotEntity[]}
          */
         entitiesIn(xRange: Range, yRange: Range): PlotEntity[];
+        private _entityBBox(datum, index, dataset, attrToProjector);
         /**
          * Gets the Entities at a particular Point.
          *
@@ -3378,6 +3384,37 @@ declare module Plottable.Plots {
          * @returns {PlotEntity[]}
          */
         entitiesAt(p: Point): PlotEntity[];
+        /**
+         * Gets the accessor for labels.
+         *
+         * @returns {Accessor<string>}
+         */
+        label(): Accessor<string>;
+        /**
+         * Sets the text of labels to the result of an Accessor.
+         *
+         * @param {Accessor<string>} label
+         * @returns {Plots.Rectangle} The calling Rectangle Plot.
+         */
+        label(label: Accessor<string>): Plots.Rectangle<X, Y>;
+        /**
+         * Gets whether labels are enabled.
+         *
+         * @returns {boolean}
+         */
+        labelsEnabled(): boolean;
+        /**
+         * Sets whether labels are enabled.
+         * Labels too big to be contained in the rectangle, cut off by edges, or blocked by other rectangles will not be shown.
+         *
+         * @param {boolean} labelsEnabled
+         * @returns {Rectangle} The calling Rectangle Plot.
+         */
+        labelsEnabled(enabled: boolean): Plots.Rectangle<X, Y>;
+        protected _additionalPaint(time: number): void;
+        private _drawLabels();
+        private _drawLabel(dataToDraw, dataset, datasetIndex);
+        private _overlayLabel(labelXRange, labelYRange, datumIndex, datasetIndex, dataToDraw);
     }
 }
 declare module Plottable.Plots {
