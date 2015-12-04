@@ -209,7 +209,9 @@ module Plottable.Plots {
     private _entityBBox(datum: any, index: number, dataset: Plottable.Dataset, attrToProjector: AttributeToProjector): SVGRect {
       return {
         x: attrToProjector["x"](datum, index, dataset),
-        y: attrToProjector["y"](datum, index, dataset)
+        y: attrToProjector["y"](datum, index, dataset),
+        width: 4,
+        height: 4
       };
     }
 
@@ -310,6 +312,8 @@ module Plottable.Plots {
         let measurement = measurer.measure(label);
         let x = attrToProjector["x"](datum, datumIndex, dataset);
         let y = attrToProjector["y"](datum, datumIndex, dataset);
+        let width = measurement.width;
+        let height = measurement.height;
         let size = attrToProjector["size"](datum, datumIndex, dataset);
 
         // let horizontalOffset = (measurement.width) / 2;

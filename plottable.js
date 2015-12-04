@@ -8130,7 +8130,9 @@ var Plottable;
             Scatter.prototype._entityBBox = function (datum, index, dataset, attrToProjector) {
                 return {
                     x: attrToProjector["x"](datum, index, dataset),
-                    y: attrToProjector["y"](datum, index, dataset)
+                    y: attrToProjector["y"](datum, index, dataset),
+                    width: 4,
+                    height: 4
                 };
             };
             /**
@@ -8201,6 +8203,8 @@ var Plottable;
                     var measurement = measurer.measure(label);
                     var x = attrToProjector["x"](datum, datumIndex, dataset);
                     var y = attrToProjector["y"](datum, datumIndex, dataset);
+                    var width = measurement.width;
+                    var height = measurement.height;
                     var size = attrToProjector["size"](datum, datumIndex, dataset);
                     // let horizontalOffset = (measurement.width) / 2;
                     var verticalOffset = (measurement.height) / 2;
