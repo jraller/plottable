@@ -3699,6 +3699,8 @@ declare module Plottable.Plots {
          * @constructor
          */
         constructor();
+        croppedRenderingEnabled(): boolean;
+        croppedRenderingEnabled(croppedRendering: boolean): this;
         protected _getAnimator(key: string): Animator;
         protected _setup(): void;
         x(): Plots.AccessorScaleBinding<X, number>;

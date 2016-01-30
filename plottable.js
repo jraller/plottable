@@ -1,5 +1,5 @@
 /*!
-Plottable 2.0.0-rc1 (https://github.com/palantir/plottable)
+Plottable 2.0.0 (https://github.com/palantir/plottable)
 Copyright 2014-2015 Palantir Technologies
 Licensed under MIT (https://github.com/palantir/plottable/blob/master/LICENSE)
 */
@@ -885,7 +885,7 @@ var Plottable;
 })(Plottable || (Plottable = {}));
 var Plottable;
 (function (Plottable) {
-    Plottable.version = "2.0.0-rc1";
+    Plottable.version = "2.0.0";
 })(Plottable || (Plottable = {}));
 var Plottable;
 (function (Plottable) {
@@ -1652,8 +1652,11 @@ var Plottable;
                     }
                 });
             });
+            var originalDomain = this._getDomain();
+            this._setBackingScaleDomain(domain);
             var newMin = minExistsInExceptions ? min : this.invert(this.scale(min) - (this.scale(max) - this.scale(min)) * p);
             var newMax = maxExistsInExceptions ? max : this.invert(this.scale(max) + (this.scale(max) - this.scale(min)) * p);
+            this._setBackingScaleDomain(originalDomain);
             if (this._snappingDomainEnabled) {
                 return this._niceDomain([newMin, newMax]);
             }
@@ -8017,7 +8020,8 @@ var Plottable;
                 var drawSteps = [];
                 if (this._animateOnNextRender()) {
                     var resetAttrToProjector = this._generateAttrToProjector();
-                    resetAttrToProjector["d"] = function () { return ""; };
+                    var symbolProjector = Plottable.Plot._scaledAccessor(this.symbol());
+                    resetAttrToProjector["d"] = function (datum, index, dataset) { return symbolProjector(datum, index, dataset)(0); };
                     drawSteps.push({ attrToProjector: resetAttrToProjector, animator: this._getAnimator(Plots.Animator.RESET) });
                 }
                 drawSteps.push({ attrToProjector: this._generateAttrToProjector(), animator: this._getAnimator(Plots.Animator.MAIN) });
@@ -9440,7 +9444,19 @@ var Plottable;
                 this._stackingResult = new Plottable.Utils.Map();
                 this._stackedExtent = [];
                 this._baselineValueProvider = function () { return [_this._baselineValue]; };
+                this.croppedRenderingEnabled(false);
             }
+            StackedArea.prototype.croppedRenderingEnabled = function (croppedRendering) {
+                if (croppedRendering == null) {
+                    return _super.prototype.croppedRenderingEnabled.call(this);
+                }
+                if (croppedRendering === true) {
+                    // HACKHACK #3032: cropped rendering doesn't currently work correctly on StackedArea
+                    Plottable.Utils.Window.warn("Warning: Stacked Area Plot does not support cropped rendering.");
+                    return this;
+                }
+                return _super.prototype.croppedRenderingEnabled.call(this, croppedRendering);
+            };
             StackedArea.prototype._getAnimator = function (key) {
                 return new Plottable.Animators.Null();
             };

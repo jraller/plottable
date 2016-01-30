@@ -126,6 +126,23 @@ describe("Scales", () => {
         assert.strictEqual(domain[0].getTime(), dayBefore.getTime(), "left side of domain was expaded by one day");
         assert.strictEqual(domain[1].getTime(), dayAfter.getTime(), "right side of domain was expaded by one day");
       });
+
+      it("doesn't lock up if a zero-width domain is set while there are value providers", () => {
+        const scale = new Plottable.Scales.Time();
+        scale.padProportion(0.1);
+        const provider = () => [new Date(2000, 5, 5), new Date(2000, 5, 6)];
+        scale.addIncludedValuesProvider(provider);
+        scale.autoDomain();
+        const originalAutoDomain = scale.domain();
+
+        scale.domain([new Date(0), new Date(0)]);
+        scale.autoDomain();
+
+        const domainAfter = scale.domain();
+
+        const numberize = (d: Date) => d.getTime();
+        assert.deepEqual(domainAfter.map(numberize), originalAutoDomain.map(numberize), "autodomained as expected");
+      });
     });
 
     describe("Domain constraints with domainMin() and domainMax()", () => {
@@ -221,7 +238,7 @@ describe("Scales", () => {
         assert.strictEqual(scale.domain()[1].getTime(), maxInMiddle.getTime(), "can set domain maximum with domainMax()");
 
         let requestedDomain2 = [new Date("2014-05-01"), new Date("2016-07-01")];
-        scale.addIncludedValuesProvider((scale: Plottable.Scales.Time) => requestedDomain2);
+        scale.addIncludedValuesProvider((_scale) => requestedDomain2);
         assert.strictEqual(scale.domain()[1].getTime(), maxInMiddle.getTime(),
           "adding another ExtentsProvider doesn't change domainMax()");
       });

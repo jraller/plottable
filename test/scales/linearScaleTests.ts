@@ -106,7 +106,7 @@ describe("Scales", () => {
         let defaultTicks = scale.ticks();
         assert.strictEqual(defaultTicks.length, 11, "ticks were generated correctly with default generator");
         assert.deepEqual(defaultTicks, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "all numbers from 0 to 10 were generated");
-        scale.tickGenerator((scale) => scale.defaultTicks().filter(tick => tick % 3 === 0));
+        scale.tickGenerator((_scale) => scale.defaultTicks().filter(tick => tick % 3 === 0));
         let customTicks = scale.ticks();
         assert.deepEqual(customTicks, [0, 3, 6, 9], "ticks were generated correctly with custom generator");
       });
@@ -148,10 +148,10 @@ describe("Scales", () => {
 
         assert.deepEqual(scale.domain(), [0, 1], "the default domain is [0, 1]");
 
-        scale.addIncludedValuesProvider((scale) => [0, 10]);
+        scale.addIncludedValuesProvider((_scale) => [0, 10]);
         assert.deepEqual(scale.domain(), [0, 10], "scale domain accounts for first provider");
 
-        scale.addIncludedValuesProvider((scale) => [-10, 0]);
+        scale.addIncludedValuesProvider((_scale) => [-10, 0]);
         assert.deepEqual(scale.domain(), [-10, 10], "scale domain accounts for second provider");
       });
 
@@ -175,16 +175,29 @@ describe("Scales", () => {
         assert.deepEqual(scale.domain(), [0, 1], "scale defaults back to the [0, 1] domain when all value providers are removed");
       });
 
+      it("doesn't lock up if a zero-width domain is set while there are value providers and padding", () => {
+        scale.padProportion(0.1);
+        const provider = () => [0, 1];
+        scale.addIncludedValuesProvider(provider);
+        scale.autoDomain();
+        const originalAutoDomain = scale.domain();
+
+        scale.domain([0, 0]);
+        scale.autoDomain();
+
+        assert.deepEqual(scale.domain(), originalAutoDomain, "autodomained as expected");
+      });
+
       it("expands single value domains to [value - 1, value + 1] when auto domaining", () => {
         let singleValue = 15;
-        scale.addIncludedValuesProvider((scale: Plottable.Scales.Linear) => [singleValue]);
+        scale.addIncludedValuesProvider((_scale) => [singleValue]);
         assert.deepEqual(scale.domain(), [singleValue - 1, singleValue + 1], "single-value extent was expanded");
       });
 
       it("can force the minimum of the domain with domainMin()", () => {
         scale.padProportion(0);
         let requestedDomain = [-5, 5];
-        scale.addIncludedValuesProvider((scale) => requestedDomain);
+        scale.addIncludedValuesProvider((_scale) => requestedDomain);
 
         let minBelowBottom = -10;
         assert.strictEqual(scale.domainMin(minBelowBottom), scale, "the scale is returned by the setter");
@@ -206,7 +219,7 @@ describe("Scales", () => {
 
         scale.domainMin(minInMiddle);
         let requestedDomain2 = [-10, 10];
-        scale.addIncludedValuesProvider((scale: Plottable.Scales.Linear) => requestedDomain2);
+        scale.addIncludedValuesProvider((_scale) => requestedDomain2);
         assert.deepEqual(scale.domain(), [minInMiddle, requestedDomain2[1]],
           "adding new IncludedValuesProvider doesn't change domainMin()");
       });
@@ -214,7 +227,7 @@ describe("Scales", () => {
       it("can force the maximum of the domain with domainMax()", () => {
         scale.padProportion(0);
         let requestedDomain = [-5, 5];
-        scale.addIncludedValuesProvider((scale) => requestedDomain);
+        scale.addIncludedValuesProvider((_scale) => requestedDomain);
 
         let maxAboveTop = 10;
         assert.strictEqual(scale.domainMax(maxAboveTop), scale, "the scale is returned by the setter");
@@ -236,7 +249,7 @@ describe("Scales", () => {
 
         scale.domainMax(maxInMiddle);
         let requestedDomain2 = [-10, 10];
-        scale.addIncludedValuesProvider((scale: Plottable.Scales.Linear) => requestedDomain2);
+        scale.addIncludedValuesProvider((_scale) => requestedDomain2);
         assert.deepEqual(scale.domain(), [requestedDomain2[0], maxInMiddle],
           "adding another IncludedValuesProvider doesn't change domainMax()");
       });
@@ -244,7 +257,7 @@ describe("Scales", () => {
       it("can force the domain by using domainMin() and domainMax() together", () => {
         scale.padProportion(0);
         let requestedDomain = [-5, 5];
-        scale.addIncludedValuesProvider((scale) => requestedDomain);
+        scale.addIncludedValuesProvider((_scale) => requestedDomain);
 
         let desiredMin = -10;
         let desiredMax = 10;
@@ -275,15 +288,19 @@ describe("Scales", () => {
       });
 
       it("stops snapping the domain when option is disabled", () => {
+        const includedValues = [0.5, 1.5];
         scale.addIncludedValuesProvider(function() {
-          return [1.123123123, 3.123123123];
+          return includedValues;
         });
+        const originalPaddedDomain = scale.domain();
 
-        assert.deepEqual(scale.domain(), [1, 3.2], "domain snapping works");
         scale.snappingDomainEnabled(false);
-        assert.deepEqual(scale.domain(), [1.073123123, 3.173123123], "domain snapping can be deactivated");
+        const padding = scale.padProportion() / 2 * (includedValues[1] - includedValues[0]);
+        const expectedDomain = [includedValues[0] - padding, includedValues[1] + padding];
+        assert.deepEqual(scale.domain(), expectedDomain, "domain snapping can be deactivated");
+
         scale.snappingDomainEnabled(true);
-        assert.deepEqual(scale.domain(), [1, 3.2], "domain snapping can be activated back");
+        assert.deepEqual(scale.domain(), originalPaddedDomain, "domain snapping can be activated back");
       });
     });
 
@@ -370,7 +387,7 @@ describe("Scales", () => {
         let svg = TestMethods.generateSVG();
         let plot = new Plottable.Plot();
 
-        (<any> plot)._createDrawer = (dataset: Plottable.Dataset) => createMockDrawer(dataset);
+        (<any> plot)._createDrawer = (_dataset: Plottable.Dataset) => createMockDrawer(_dataset);
         plot.addDataset(dataset);
         plot.attr("x", (d) => d.x, scale);
         plot.renderTo(svg);
@@ -388,12 +405,12 @@ describe("Scales", () => {
         let svg2 = TestMethods.generateSVG();
 
         let plot1 = new Plottable.Plot();
-        (<any> plot1)._createDrawer = (dataset: Plottable.Dataset) => createMockDrawer(dataset);
+        (<any> plot1)._createDrawer = (_dataset: Plottable.Dataset) => createMockDrawer(_dataset);
         plot1.addDataset(dataset).attr("x", (d) => d.x, scale);
         plot1.renderTo(svg1);
 
         let plot2 = new Plottable.Plot();
-        (<any> plot2)._createDrawer = (dataset: Plottable.Dataset) => createMockDrawer(dataset);
+        (<any> plot2)._createDrawer = (_dataset: Plottable.Dataset) => createMockDrawer(_dataset);
         plot2.addDataset(dataset).attr("x", (d) => d.x, scale);
         plot2.renderTo(svg2);
 
