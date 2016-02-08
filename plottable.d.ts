@@ -3311,6 +3311,9 @@ declare module Plottable.Plots {
          * @returns {Plots.Scatter} The calling Scatter Plot.
          */
         symbol(symbol: Accessor<SymbolFactory>): this;
+        protected _generateAttrToProjector(): {
+            [attr: string]: (datum: any, index: number, dataset: Dataset) => any;
+        };
         protected _generateDrawSteps(): Drawers.DrawStep[];
         protected _entityVisibleOnPlot(pixelPoint: Point, datum: any, index: number, dataset: Dataset): boolean;
         protected _propertyProjectors(): AttributeToProjector;
@@ -3347,9 +3350,9 @@ declare module Plottable.Plots {
          * Sets the text of labels to the result of an Accessor.
          *
          * @param {Accessor<string>} label
-         * @returns {Plots.Rectangle} The calling Rectangle Plot.
+         * @returns {Plots.Scatter} The calling Rectangle Plot.
          */
-        label(label: Accessor<string>): Plots.Rectangle<X, Y>;
+        label(label: Accessor<string>): Plots.Scatter<X, Y>;
         /**
          * Gets whether labels are enabled.
          *
@@ -3361,13 +3364,13 @@ declare module Plottable.Plots {
          * Labels too big to be contained in the rectangle, cut off by edges, or blocked by other rectangles will not be shown.
          *
          * @param {boolean} labelsEnabled
-         * @returns {Rectangle} The calling Rectangle Plot.
+         * @returns {Scatter} The calling Scatter Plot.
          */
-        labelsEnabled(enabled: boolean): Plots.Rectangle<X, Y>;
+        labelsEnabled(enabled: boolean): Plots.Scatter<X, Y>;
         protected _additionalPaint(time: number): void;
         private _drawLabels();
         private _drawLabel(dataToDraw, dataset, datasetIndex);
-        private _overlayLabel(labelXRange, labelYRange, datumIndex, datasetIndex, dataToDraw);
+        private _overlayLabel(labelXRange, labelYRange, datumIndex, datasetIndex, dataToDraw, measurer);
     }
 }
 declare module Plottable.Plots {
