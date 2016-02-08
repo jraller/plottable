@@ -2168,14 +2168,14 @@ var Plottable;
                 var colorTester = d3.select("body").append("plottable-color-tester");
                 var defaultColorHex = Plottable.Utils.Color.colorTest(colorTester, "");
                 var i = 0;
-                var colorHex;
-                while ((colorHex = Plottable.Utils.Color.colorTest(colorTester, "plottable-colors-" + i)) !== null &&
-                    i < this._MAXIMUM_COLORS_FROM_CSS) {
+                var colorHex = Plottable.Utils.Color.colorTest(colorTester, "plottable-colors-0");
+                while (colorHex != null && i < this._MAXIMUM_COLORS_FROM_CSS) {
                     if (colorHex === defaultColorHex && colorHex === plottableDefaultColors[plottableDefaultColors.length - 1]) {
                         break;
                     }
                     plottableDefaultColors.push(colorHex);
                     i++;
+                    colorHex = Plottable.Utils.Color.colorTest(colorTester, "plottable-colors-" + i);
                 }
                 colorTester.remove();
                 return plottableDefaultColors;
@@ -3507,7 +3507,7 @@ var Plottable;
                 this.addClass("y-axis");
             }
             this.formatter(Plottable.Formatters.identity());
-            this._rescaleCallback = function (scale) { return _this._rescale(); };
+            this._rescaleCallback = function (newScale) { return _this._rescale(); };
             this._scale.onUpdate(this._rescaleCallback);
             this._annotatedTicks = [];
             this._annotationFormatter = Plottable.Formatters.identity();
@@ -4202,11 +4202,11 @@ var Plottable;
                 var tickPos = this._getTickValuesForConfiguration(config);
                 var labelPos = [];
                 if (this._tierLabelPositions[index] === "between" && config.step === 1) {
-                    tickPos.map(function (datum, index) {
-                        if (index + 1 >= tickPos.length) {
+                    tickPos.map(function (datum, i) {
+                        if (i + 1 >= tickPos.length) {
                             return;
                         }
-                        labelPos.push(new Date((tickPos[index + 1].valueOf() - tickPos[index].valueOf()) / 2 + tickPos[index].valueOf()));
+                        labelPos.push(new Date((tickPos[i + 1].valueOf() - tickPos[i].valueOf()) / 2 + tickPos[i].valueOf()));
                     });
                 }
                 else {
@@ -8148,24 +8148,51 @@ var Plottable;
                 var yMax = Math.max.apply(null, yRange);
                 var data = dataToDraw.get(dataset);
                 data.forEach(function (datum, datumIndex) {
+                    //        console.log(datum, datumIndex);
                     var label = "" + _this.label()(datum, datumIndex, dataset);
-                    var measurement = measurer.measure(label);
                     var x = attrToProjector["x"](datum, datumIndex, dataset);
                     var y = attrToProjector["y"](datum, datumIndex, dataset);
-                    var width = measurement.width;
-                    var height = measurement.height;
-                    var size = attrToProjector["size"](datum, datumIndex, dataset);
-                    // let horizontalOffset = (measurement.width) / 2;
-                    var verticalOffset = (measurement.height) / 2;
-                    x += size / 2;
-                    y -= verticalOffset + (size / 2);
-                    var xLabelRange = { min: x, max: x + measurement.width };
-                    var yLabelRange = { min: y, max: y + measurement.height };
-                    if (xLabelRange.min < xMin || xLabelRange.max > xMax || yLabelRange.min < yMin || yLabelRange.max > yMax) {
-                        return;
-                    }
-                    if (_this._overlayLabel(xLabelRange, yLabelRange, datumIndex, datasetIndex, dataToDraw)) {
-                        return;
+                    var notFit = true; // is label full length?
+                    var pass = 0; // how much have we altered the label
+                    var measurement = measurer.measure(label);
+                    while (notFit && label.length > 1) {
+                        var crossBorder = false; // is label reaching outside chart
+                        var overlap = false; // is label overlapping another?
+                        measurement = measurer.measure(label);
+                        var width = measurement.width;
+                        var height = measurement.height;
+                        var size = attrToProjector["size"](datum, datumIndex, dataset);
+                        // let horizontalOffset = (measurement.width) / 2;
+                        if (pass === 0) {
+                            var verticalOffset = (measurement.height) / 2;
+                            x += size / 2;
+                            y -= verticalOffset + (size / 2);
+                        }
+                        var xLabelRange = { min: x, max: x + measurement.width };
+                        var yLabelRange = { min: y, max: y + measurement.height };
+                        // do not show labels that would go outside the plot
+                        if (xLabelRange.min < xMin || xLabelRange.max > xMax || yLabelRange.min < yMin || yLabelRange.max > yMax) {
+                            // return;
+                            crossBorder = true;
+                        }
+                        // prevent label from obscuring another label
+                        if (_this._overlayLabel(xLabelRange, yLabelRange, datumIndex, datasetIndex, dataToDraw, measurer)) {
+                            // return;
+                            overlap = true;
+                        }
+                        //      console.log(label, crossBorder, overlap, width, xLabelRange, yLabelRange, xMin, xMax, yMin, yMax);
+                        if (crossBorder || overlap) {
+                            var final = label.slice(label.length - 1);
+                            var remove = 1;
+                            if (final === '\u2026') {
+                                remove = 2;
+                            }
+                            label = label.substring(0, label.length - remove).trim() + '\u2026';
+                        }
+                        else {
+                            notFit = false;
+                        }
+                        pass += 1;
                     }
                     var color = attrToProjector["fill"](datum, datumIndex, dataset);
                     var dark = Plottable.Utils.Color.contrast("white", color) * 1.6 < Plottable.Utils.Color.contrast("black", color);
@@ -8180,14 +8207,24 @@ var Plottable;
                     });
                 });
             };
-            Scatter.prototype._overlayLabel = function (labelXRange, labelYRange, datumIndex, datasetIndex, dataToDraw) {
+            Scatter.prototype._overlayLabel = function (labelXRange, labelYRange, datumIndex, datasetIndex, dataToDraw, measurer) {
                 var attrToProjector = this._generateAttrToProjector();
                 var datasets = this.datasets();
                 for (var i = datasetIndex; i < datasets.length; i++) {
                     var dataset = datasets[i];
                     var data = dataToDraw.get(dataset);
                     for (var j = (i === datasetIndex ? datumIndex + 1 : 0); j < data.length; j++) {
-                        if (Plottable.Utils.DOM.intersectsBBox(labelXRange, labelYRange, this._entityBBox(data[j], j, dataset, attrToProjector))) {
+                        // get the comparison target
+                        var target = this._entityBBox(data[j], j, dataset, attrToProjector);
+                        // get its label
+                        var label = "" + this.label()(data[j], j, dataset);
+                        // measure its label
+                        var measurement = measurer.measure(label);
+                        // adjust the y pos
+                        target.y = target.y + target.height - measurement.height;
+                        // set the height
+                        target.height = Math.max(target.height, measurement.height);
+                        if (Plottable.Utils.DOM.intersectsBBox(labelXRange, labelYRange, target)) {
                             return true;
                         }
                     }
@@ -9875,9 +9912,11 @@ var Plottable;
                 return intersections.length > 0;
             };
             Segment.prototype._lineIntersectsSegment = function (point1, point2, point3, point4) {
+                /* tslint:disable no-shadowed-variable */
                 var calcOrientation = function (point1, point2, point) {
                     return (point2.x - point1.x) * (point.y - point2.y) - (point2.y - point1.y) * (point.x - point2.x);
                 };
+                /* tslint:enable no-shadowed-variable */
                 // point3 and point4 are on different sides of line formed by point1 and point2
                 return calcOrientation(point1, point2, point3) * calcOrientation(point1, point2, point4) < 0;
             };
