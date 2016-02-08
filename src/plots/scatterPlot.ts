@@ -228,9 +228,9 @@ module Plottable.Plots {
      * Sets the text of labels to the result of an Accessor.
      *
      * @param {Accessor<string>} label
-     * @returns {Plots.Rectangle} The calling Rectangle Plot.
+     * @returns {Plots.Scatter} The calling Rectangle Plot.
      */
-    public label(label: Accessor<string>): Plots.Rectangle<X, Y>;
+    public label(label: Accessor<string>): Plots.Scatter<X, Y>;
     public label(label?: Accessor<string>): any {
       if (label == null) {
         return this._label;
@@ -252,9 +252,9 @@ module Plottable.Plots {
      * Labels too big to be contained in the rectangle, cut off by edges, or blocked by other rectangles will not be shown.
      *
      * @param {boolean} labelsEnabled
-     * @returns {Rectangle} The calling Rectangle Plot.
+     * @returns {Scatter} The calling Scatter Plot.
      */
-    public labelsEnabled(enabled: boolean): Plots.Rectangle<X, Y>;
+    public labelsEnabled(enabled: boolean): Plots.Scatter<X, Y>;
     public labelsEnabled(enabled?: boolean): any {
       if (enabled == null) {
         return this._labelsEnabled;
@@ -290,26 +290,56 @@ module Plottable.Plots {
       let yMax = Math.max.apply(null, yRange);
       let data = dataToDraw.get(dataset);
       data.forEach((datum, datumIndex) => {
+//        console.log(datum, datumIndex);
         let label = "" + this.label()(datum, datumIndex, dataset);
-        let measurement = measurer.measure(label);
         let x = attrToProjector["x"](datum, datumIndex, dataset);
         let y = attrToProjector["y"](datum, datumIndex, dataset);
-        let width = measurement.width;
-        let height = measurement.height;
-        let size = attrToProjector["size"](datum, datumIndex, dataset);
 
-        // let horizontalOffset = (measurement.width) / 2;
-        let verticalOffset = (measurement.height) / 2;
-        x += size / 2;
-        y -= verticalOffset + (size / 2);
+        let notFit = true; // is label full length?
+        let pass = 0; // how much have we altered the label
+        let measurement = measurer.measure(label);
 
-        let xLabelRange = { min: x, max: x + measurement.width };
-        let yLabelRange = { min : y, max: y + measurement.height };
-        if (xLabelRange.min < xMin || xLabelRange.max > xMax || yLabelRange.min < yMin || yLabelRange.max > yMax) {
-          return;
-        }
-        if (this._overlayLabel(xLabelRange, yLabelRange, datumIndex, datasetIndex, dataToDraw)) {
-          return;
+        while (notFit && label.length > 1) {
+          let crossBorder = false; // is label reaching outside chart
+          let overlap = false; // is label overlapping another?
+          measurement = measurer.measure(label);
+          let width = measurement.width;
+          let height = measurement.height;
+          let size = attrToProjector["size"](datum, datumIndex, dataset);
+
+          // let horizontalOffset = (measurement.width) / 2;
+          if (pass === 0) {
+            let verticalOffset = (measurement.height) / 2;
+            x += size / 2;
+            y -= verticalOffset + (size / 2);
+          }
+
+          let xLabelRange = { min: x, max: x + measurement.width };
+          let yLabelRange = { min: y, max: y + measurement.height };
+          // do not show labels that would go outside the plot
+          if (xLabelRange.min < xMin || xLabelRange.max > xMax || yLabelRange.min < yMin || yLabelRange.max > yMax) {
+            // return;
+            crossBorder = true;
+          }
+          // prevent label from obscuring another label
+          if (this._overlayLabel(xLabelRange, yLabelRange, datumIndex, datasetIndex, dataToDraw, measurer)) {
+            // return;
+            overlap = true;
+          }
+
+//      console.log(label, crossBorder, overlap, width, xLabelRange, yLabelRange, xMin, xMax, yMin, yMax);
+
+          if (crossBorder || overlap) {
+              let final = label.slice(label.length - 1);
+              let remove = 1;
+              if (final === '\u2026') {
+                remove = 2;
+              }
+              label = label.substring(0, label.length - remove).trim() + '\u2026';
+          } else {
+            notFit = false;
+          }
+          pass += 1;
         }
 
         let color = attrToProjector["fill"](datum, datumIndex, dataset);
@@ -327,23 +357,33 @@ module Plottable.Plots {
     }
 
     private _overlayLabel(labelXRange: Range, labelYRange: Range, datumIndex: number, datasetIndex: number,
-                          dataToDraw: Utils.Map<Dataset, any[]>) {
+                          dataToDraw: Utils.Map<Dataset, any[]>, measurer: any) {
+
       let attrToProjector = this._generateAttrToProjector();
       let datasets = this.datasets();
       for (let i = datasetIndex; i < datasets.length; i ++ ) {
         let dataset = datasets[i];
         let data = dataToDraw.get(dataset);
         for (let j = (i === datasetIndex ? datumIndex + 1 : 0); j < data.length ; j ++ ) {
-          if (Utils.DOM.intersectsBBox(labelXRange, labelYRange, this._entityBBox(data[j], j, dataset, attrToProjector))) {
+          // get the comparison target
+          let target = this._entityBBox(data[j], j, dataset, attrToProjector);
+          // get its label
+          let label = "" + this.label()(data[j], j, dataset);
+          // measure its label
+          let measurement = measurer.measure(label);
+
+          // adjust the y pos
+          target.y = target.y + target.height - measurement.height;
+          // set the height
+          target.height = Math.max(target.height, measurement.height);
+
+          if (Utils.DOM.intersectsBBox(labelXRange, labelYRange, target)) {
             return true;
           }
         }
       }
       return false;
     }
-
-
-
 
   }
 }
