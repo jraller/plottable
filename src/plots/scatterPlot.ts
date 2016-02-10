@@ -299,7 +299,7 @@ module Plottable.Plots {
         let pass = 0; // how much have we altered the label
         let measurement = measurer.measure(label);
 
-        while (notFit && label.length > 1) {
+        while (notFit && label.length > 2) {
           let crossBorder = false; // is label reaching outside chart
           let overlap = false; // is label overlapping another?
           measurement = measurer.measure(label);
